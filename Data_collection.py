@@ -105,6 +105,13 @@ class Timer(object):
     def elapsed_seconds_since_lap(self):
         return time.time() - self._lap_time
 
+class PID:
+    def __init__(self):
+        self.kp = 0.05
+        self.ki = 0.1
+        self.prev = 0
+pid = PID()
+
 class CarlaGame(object):
     def __init__(self, carla_client, args):
         self.client = carla_client
@@ -267,25 +274,35 @@ class CarlaGame(object):
         if keys[K_LEFT] or keys[K_a]:
             self._val1 = -1
             print("Left")
+            if(pid.prev > 0):
+                pid.prev = 0
         elif keys[K_RIGHT] or keys[K_d]:
             self._val1 = 1
             print("Right")
-        print(self._val1)
-        control.steer = self._val1   #Imp Line
+            if(pid.prev < 0):
+                pid.prev = 0
+        pid.prev += self._val1
+        output = pid.kp*self._val1 + pid.ki*pid.prev
+        print(output)
+        control.steer = output   #Imp Line
         
         if keys[K_UP] or keys[K_w]:
             self._val2 = 1
+            pid.prev = 0
 
         elif keys[K_DOWN] or keys[K_s]:
             control.brake = 1
+            pid.prev = 0
         ###  
         control.throttle = self._val2     #Imp Line
         if keys[K_SPACE]:
             control.hand_brake = True
+            pid.prev = 0
         if keys[K_f]:
             self._val3 = 1 - self._val3
         if keys[K_q]:
             self._is_on_reverse = not self._is_on_reverse
+            pid.prev = 0
         if keys[K_p]:
             self._enable_autopilot = not self._enable_autopilot
         control.reverse = self._is_on_reverse
