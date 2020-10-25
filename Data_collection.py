@@ -107,7 +107,7 @@ class Timer(object):
 
 class PID:
     def __init__(self):
-        self.kp = 0.05
+        self.kp = 0.04
         self.ki = 0.1
         self.prev = 0
 pid = PID()
@@ -293,8 +293,11 @@ class CarlaGame(object):
         elif keys[K_DOWN] or keys[K_s]:
             control.brake = 1
             pid.prev = 0
-        ###  
-        control.throttle = self._val2     #Imp Line
+        ###
+        if(self._velocity < 77):
+            control.throttle = self._val2     #Imp Line
+        else:
+            control.throttle = self._val2*0.8
         if keys[K_SPACE]:
             control.hand_brake = True
             pid.prev = 0
