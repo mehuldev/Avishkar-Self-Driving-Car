@@ -101,17 +101,18 @@ class Timer(object):
 
 
 class PID:
-    def __init__(self):
-        self.kp = 0.04
-        self.ki = 0.1
-        self.kd = 0.1
+    def __init__(self,kp,ki,kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
         self.total = 0
         self.prev = 0
 
 
-pid = PID()
-steer_pid = PID()
-throttle_pid = PID()
+#pid = PID()
+
+steer_pid = PID(kp=0.04,ki=0.1,kd=0.1)
+throttle_pid = PID(kp=0.04,ki=0.1,kd=0.1)
 
 
 class CarlaGame(object):
@@ -218,10 +219,11 @@ class CarlaGame(object):
             x = [img]
             x = np.asarray(x)
             s, t = model.predict(x)[0]
-            control.throttle = throttle_pid.kp * t + throttle_pid.prev * throttle_pid.ki
-            throttle_pid.prev += t
-            control.steer = steer_pid.kp * s + steer_pid.prev * steer_pid.ki
-            steer_pid.prev += s
+            throttle_pid.total += t
+            control.throttle = throttle_pid.kp * t + throttle_pid.total * throttle_pid.ki
+            steer_pid.total += s
+            control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki+ (s-steer_pid.prev)*throttle_pid.kd
+            steer_pid.prev = s
             print(control.steer, control.throttle)
         except:
             print("fir ruk gya")
