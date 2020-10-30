@@ -23,20 +23,13 @@ import time
 import cv2
 import numpy as np
 import os
-
-from tensorflow.python.keras.models import load_model
-   
-import pandas as pd
-
-
-
 import tensorflow as tf
 from tensorflow import keras
+from tensorflow.python.keras.models import load_model
 from PIL import Image
-tf.debugging.set_log_device_placement(True)
-os.chdir("Models")
-model= load_model("model2.h5")
-os.chdir('../')
+
+#tf.debugging.set_log_device_placement(True)
+model = load_model("Models/model1.h5")
 try:
     import pygame
 
@@ -56,11 +49,12 @@ from carla.settings import CarlaSettings
 from carla.tcp import TCPConnectionError
 from carla.util import print_over_same_line
 
-i=0
+i = 0
 WINDOW_WIDTH = 320
 WINDOW_HEIGHT = 240
 MINI_WINDOW_WIDTH = 320
 MINI_WINDOW_HEIGHT = 180
+
 
 def make_carla_settings(args):
     """Make a CarlaSettings object with the settings we need."""
@@ -78,12 +72,13 @@ def make_carla_settings(args):
     camera0.set_position(2.0, 0.0, 1.4)
     camera0.set_rotation(0.0, 0.0, 0.0)
     settings.add_sensor(camera0)
-    #camera1 = sensor.Camera('CameraDepth', PostProcessing='Depth')
-    #camera1.set_image_size(MINI_WINDOW_WIDTH, MINI_WINDOW_HEIGHT)
-    #camera1.set_position(2.0, 0.0, 1.4)
-    #camera1.set_rotation(0.0, 0.0, 0.0)
-    #settings.add_sensor(camera1)
+    # camera1 = sensor.Camera('CameraDepth', PostProcessing='Depth')
+    # camera1.set_image_size(MINI_WINDOW_WIDTH, MINI_WINDOW_HEIGHT)
+    # camera1.set_position(2.0, 0.0, 1.4)
+    # camera1.set_rotation(0.0, 0.0, 0.0)
+    # settings.add_sensor(camera1)
     return settings
+
 
 class Timer(object):
     def __init__(self):
@@ -104,12 +99,20 @@ class Timer(object):
     def elapsed_seconds_since_lap(self):
         return time.time() - self._lap_time
 
+
 class PID:
     def __init__(self):
         self.kp = 0.04
         self.ki = 0.1
+        self.kd = 0.1
+        self.total = 0
         self.prev = 0
+
+
 pid = PID()
+steer_pid = PID()
+throttle_pid = PID()
+
 
 class CarlaGame(object):
     def __init__(self, carla_client, args):
@@ -131,8 +134,8 @@ class CarlaGame(object):
         self._agent_positions = None
 
         ################################################################ EDIT BY MY
-        
-        ## - i is for data image sequence 
+
+        ## - i is for data image sequence
         self._i = 0
         ## - val1 is for steering angle
         self._val1 = 0
@@ -162,23 +165,24 @@ class CarlaGame(object):
                 self._on_loop()
 
         finally:
-            ################################################################### SAVING THE DATA ON MEMORY 
-            os.chdir('C:\\Users\\ABHISHEK KUMAR\\Desktop\\Carla\\CarlaSimulator\\PythonClient\\')     ## SET FOLDER FOR STORING IMAGE DATA
-            io.savemat('data',self._data)   #SAVING....
+            ################################################################### SAVING THE DATA ON MEMORY
+            os.chdir(
+                'C:\\Users\\User\\Desktop\\CarlaSimulator\\PythonClient\\img')  ## SET FOLDER FOR STORING IMAGE DATA
+            io.savemat('data', self._data)  # SAVING....
             print("Data Saved")
             pygame.quit()
-            
+
             ####################################
-    
+
     def _initialize_game(self):
         self._on_new_episode()
-        
+
         if self._city_name is not None:
             self._map = CarlaMap(self._city_name, 0.1643, 50.0)
             self._map_shape = self._map.map_image.shape
             self._map_view = self._map.get_map(WINDOW_HEIGHT)
 
-            extra_width = int((WINDOW_HEIGHT/float(self._map_shape[0]))*self._map_shape[1])
+            extra_width = int((WINDOW_HEIGHT / float(self._map_shape[0])) * self._map_shape[1])
             self._display = pygame.display.set_mode(
                 (WINDOW_WIDTH + extra_width, WINDOW_HEIGHT),
                 pygame.HWSURFACE | pygame.DOUBLEBUF)
@@ -186,9 +190,9 @@ class CarlaGame(object):
             self._display = pygame.display.set_mode(
                 (WINDOW_WIDTH, WINDOW_HEIGHT),
                 pygame.HWSURFACE | pygame.DOUBLEBUF)
-        
+
         logging.debug('pygame started')
-    
+
     def _on_new_episode(self):
         self._carla_settings.randomize_seeds()
         self._carla_settings.randomize_weather()
@@ -201,36 +205,33 @@ class CarlaGame(object):
         self.client.start_episode(player_start)
         self._timer = Timer()
         self._is_on_reverse = False
-    
-    
+
     def _on_loop(self):
-        
-        
+
         measurements, sensor_data = self.client.read_data()
         control = VehicleControl()
         self._main_image = sensor_data.get('CameraRGB', None)
-        #self._mini_view_image1 = sensor_data.get('CameraDepth', None)
+        # self._mini_view_image1 = sensor_data.get('CameraDepth', None)
         try:
             print("model starting")
-            print(self._main_image)
             img = image_converter.to_rgb_array(self._main_image)
-            x=[img]
-            x=np.asarray(x)
-            print(x.shape)
-            a,b = model.predict(x)[0]
-            control.throttle=b
-            control.steer=a
-            print(control.steer,control.throttle)
+            x = [img]
+            x = np.asarray(x)
+            s, t = model.predict(x)[0]
+            control.throttle = throttle_pid.kp * t + throttle_pid.prev * throttle_pid.ki
+            throttle_pid.prev += t
+            control.steer = steer_pid.kp * s + steer_pid.prev * steer_pid.ki
+            steer_pid.prev += s
+            print(control.steer, control.throttle)
         except:
             print("fir ruk gya")
-       
+
         if control is None:
             print("kuch nhi")
         elif self._enable_autopilot:
             self.client.send_control(measurements.player_measurements.autopilot_control)
         else:
             self.client.send_control(control)
-
 
 
 def main():
