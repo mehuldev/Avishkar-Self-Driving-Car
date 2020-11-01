@@ -324,40 +324,7 @@ class CarlaGame(object):
             # control = model.evaluate(X, Y, verbose=0)
             # print(control)
             return control
-
-    def _print_player_measurements_map(self, player_measurements, map_position, lane_orientation):
-        message = 'Step {step} ({fps:.1f} FPS): '
-        message += 'Map Position ({map_x:.1f},{map_y:.1f}) '
-        message += 'Lane Orientation ({ori_x:.1f},{ori_y:.1f}) '
-        message += '{speed:.2f} km/h, '
-        message += '{other_lane:.0f}% other lane, {offroad:.0f}% off-road'
-        message = message.format(
-            map_x=map_position[0],
-            map_y=map_position[1],
-            ori_x=lane_orientation[0],
-            ori_y=lane_orientation[1],
-            step=self._timer.step,
-            fps=self._timer.ticks_per_second(),
-            speed=player_measurements.forward_speed * 3.6,
-            other_lane=100 * player_measurements.intersection_otherlane,
-            offroad=100 * player_measurements.intersection_offroad)
-        print_over_same_line(message)
-        self._velocity = player_measurements.forward_speed * 3.6
-
-    def _print_player_measurements(self, player_measurements):
-        message = 'Step {step} ({fps:.1f} FPS): '
-        message += '{speed:.2f} km/h, '
-        message += '{other_lane:.0f}% other lane, {offroad:.0f}% off-road'
-        message = message.format(
-            step=self._timer.step,
-            fps=self._timer.ticks_per_second(),
-            speed=player_measurements.forward_speed * 3.6,
-            other_lane=100 * player_measurements.intersection_otherlane,
-            offroad=100 * player_measurements.intersection_offroad)
-        print_over_same_line(message)
-        self._velocity = player_measurements.forward_speed * 3.6
-
-
+        
 def main():
     argparser = argparse.ArgumentParser(
         description='CARLA Manual Control Client')
