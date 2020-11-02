@@ -29,7 +29,7 @@ from tensorflow.python.keras.models import load_model
 from PIL import Image
 
 #tf.debugging.set_log_device_placement(True)
-model = load_model("Models/model9.h5")
+model = load_model("Models/model12.h5")
 try:
     import pygame
 
@@ -110,7 +110,7 @@ class PID:
 
 #pid = PID()
 
-steer_pid = PID(kp=0.004,ki=0.01,kd=0.5)
+steer_pid = PID(kp=0.004,ki=0.005,kd=0.5)
 throttle_pid = PID(kp=0.04,ki=0.1,kd=0.1)
 
 class CarlaGame(object):
@@ -219,7 +219,7 @@ class CarlaGame(object):
             s = model.predict(x)[0]
             throttle_pid.total += self.t
             if(steer_pid.prev * s < 0):
-                steer_pid.total *= 0.2
+                steer_pid.total *= 0.1
             control.throttle = throttle_pid.kp * self.t + throttle_pid.total * throttle_pid.ki
             steer_pid.total += s
             control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki + (s - steer_pid.prev) * steer_pid.kd
@@ -232,7 +232,7 @@ class CarlaGame(object):
             print("fir ruk gya")
             throttle_pid.total += self.t
             control.throttle = throttle_pid.kp * self.t + throttle_pid.total * throttle_pid.ki
-            control.steer = steer_pid.prev * steer_pid.kp
+            control.steer = steer_pid.total*steer_pid.ki*0.1
             if (self.t > 10):
                 self.t = 0
                 throttle_pid.total *= 0.2
