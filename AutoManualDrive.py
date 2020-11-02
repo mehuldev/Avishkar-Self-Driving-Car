@@ -121,8 +121,8 @@ class PID:
 
 pid = PID(kp = 0.04, ki=0.1,kd=0)
 
-steer_pid = PID(kp=0.04,ki=0.1,kd=0.1)
-throttle_pid = PID(kp=0.04,ki=0.1,kd=0.1)
+steer_pid = PID(kp=0.004,ki=0.01,kd=0.5)
+throttle_pid = PID(kp=0.004,ki=0.1,kd=0)
 
 
 class CarlaGame(object):
@@ -144,6 +144,7 @@ class CarlaGame(object):
         self._position = None
         self._agent_positions = None
         self.auto = False
+        self.t = 0
         ################################################################ EDIT BY MY
 
         ## - i is for data image sequence
@@ -181,7 +182,7 @@ class CarlaGame(object):
                         print("AAAA")
                 self._on_loop()
                 self._on_render()
-                
+
         finally:
             ################################################################### SAVING THE DATA ON MEMORY
             os.chdir('C:\\Users\\ABHISHEK KUMAR\\Desktop\\Carla\\CarlaSimulator\\PythonClient\\')  ## SET FOLDER FOR STORING IMAGE DATA
@@ -252,7 +253,6 @@ class CarlaGame(object):
         if keys[K_r]:
             return None
         control = VehicleControl()
-        self.resetVal()
         ################################################### YOU CAN EDIT IT ACCORDING YOU....
         if keys[K_p]:
             if not self.auto:
@@ -265,33 +265,39 @@ class CarlaGame(object):
                 time.sleep(0.5)
         if self.auto:
             try:
-                # print("model starting")
+                #print("model starting")
                 img = image_converter.to_rgb_array(self._main_image)
                 x = [img]
                 x = np.asarray(x)
-                s, t = model.predict(x)[0]
-                throttle_pid.total += t
-                control.throttle = throttle_pid.kp * t + throttle_pid.total * throttle_pid.ki
+                s = model.predict(x)[0]
+                if (steer_pid.prev * s < 0):
+                    steer_pid.total *= 0.2
                 steer_pid.total += s
-                control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki + (
-                            s - steer_pid.prev) * throttle_pid.kd
+                control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki + (s - steer_pid.prev) * steer_pid.kd
                 steer_pid.prev = s
-                self.client.send_control(control)
-                print(control.steer, control.throttle)
+                if (self._velocity > 76):
+                    control.throttle = 0.8
+                else:
+                    control.throttle = 1
+
             except:
-                control.throttle = throttle_pid.prev * throttle_pid.kp
                 control.steer = steer_pid.prev * steer_pid.kp
-                self.client.send_control(control)
-                print(control.throttle, control.steer)
+                if (self._velocity > 76):
+                    control.throttle = 0.8
+                else:
+                    control.throttle = 1
+            print(control)
+            return control
         else:
+            self.resetVal()
             if keys[K_LEFT] or keys[K_a]:
                 self._val1 = -1
-                print("Left")
+                #print("Left")
                 if (pid.prev > 0):
                     pid.prev = 0
             elif keys[K_RIGHT] or keys[K_d]:
                 self._val1 = 1
-                print("Right")
+                #print("Right")
                 if (pid.prev < 0):
                     pid.prev = 0
             pid.prev += self._val1
@@ -365,7 +371,7 @@ class CarlaGame(object):
 
         if self._main_image is not None:
             array = image_converter.to_rgb_array(self._main_image)
-            
+
             ################################################################################################   SAVING IMAGE DATA IN %SELF._DATA%
             #print(self._velocity)
             #print("\n")
@@ -373,7 +379,7 @@ class CarlaGame(object):
                 print("\nimage is saved\n")
                 self._data['data{}_angle_{}_throttle_{}_speed_{}'.format(self._i,format(self._val1,'.2f'),format(self._val2,'.2f'),format(self._velocity,'.2f'))] = array
             self._i +=1   ##FRAME NUMBER INCREASE BY ONE
-            
+
             surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
             self._display.blit(surface, (0, 0))
 
@@ -381,19 +387,19 @@ class CarlaGame(object):
             array = image_converter.depth_to_logarithmic_grayscale(self._mini_view_image1)
             surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
             self._display.blit(surface, (gap_x, mini_image_y))
-        
+
         if self._map_view is not None:
             array = self._map_view
             array = array[:, :, :3]
-            
+
             new_window_width = \
                 (float(WINDOW_HEIGHT) / float(self._map_shape[0])) * \
                 float(self._map_shape[1])
             surface = pygame.surfarray.make_surface(array.swapaxes(0, 1))
-            
+
             w_pos = int(self._position[0]*(float(WINDOW_HEIGHT)/float(self._map_shape[0])))
             h_pos = int(self._position[1] *(new_window_width/float(self._map_shape[1])))
-            
+
             pygame.draw.circle(surface, [255, 0, 0, 255], (w_pos, h_pos), 6, 0)
             for agent in self._agent_positions:
                 if agent.HasField('vehicle'):
@@ -401,14 +407,14 @@ class CarlaGame(object):
                         agent.vehicle.transform.location.x,
                         agent.vehicle.transform.location.y,
                         agent.vehicle.transform.location.z])
-                    
+
                     w_pos = int(agent_position[0]*(float(WINDOW_HEIGHT)/float(self._map_shape[0])))
                     h_pos = int(agent_position[1] *(new_window_width/float(self._map_shape[1])))
-                    
+
                     pygame.draw.circle(surface, [255, 0, 255, 255], (w_pos, h_pos), 4, 0)
-            
+
             self._display.blit(surface, (WINDOW_WIDTH, 0))
-        
+
         pygame.display.flip()
 
 def main():
