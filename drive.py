@@ -23,29 +23,16 @@ import time
 import cv2
 import numpy as np
 import os
-import scipy.io as io
 import tensorflow as tf
-import matplotlib.pyplot as plt
-
 from tensorflow import keras
-from keras.models import load_model
+from tensorflow.python.keras.models import load_model
 from PIL import Image
 
+#tf.debugging.set_log_device_placement(True)
+model = load_model("Models/model9.h5")
 try:
     import pygame
-    from pygame.locals import K_DOWN
-    from pygame.locals import K_LEFT
-    from pygame.locals import K_RIGHT
-    from pygame.locals import K_SPACE
-    from pygame.locals import K_UP
-    from pygame.locals import K_a
-    from pygame.locals import K_d
-    from pygame.locals import K_p
-    from pygame.locals import K_q
-    from pygame.locals import K_r
-    from pygame.locals import K_s
-    from pygame.locals import K_w
-    from pygame.locals import K_f
+
 except ImportError:
     raise RuntimeError('cannot import pygame, make sure pygame package is installed')
 
@@ -67,8 +54,6 @@ WINDOW_WIDTH = 320
 WINDOW_HEIGHT = 240
 MINI_WINDOW_WIDTH = 320
 MINI_WINDOW_HEIGHT = 180
-
-model = load_model('./Models/model1.h5')
 
 def make_carla_settings(args):
     """Make a CarlaSettings object with the settings we need."""
@@ -123,11 +108,10 @@ class PID:
         self.prev = 0
 
 
-pid = PID(kp = 0.04, ki=0.1,kd=0)
+#pid = PID()
 
-steer_pid = PID(kp=0.04,ki=0.1,kd=0.1)
+steer_pid = PID(kp=0.004,ki=0.01,kd=0.5)
 throttle_pid = PID(kp=0.04,ki=0.1,kd=0.1)
-
 
 class CarlaGame(object):
     def __init__(self, carla_client, args):
@@ -147,7 +131,7 @@ class CarlaGame(object):
         self._map_view = None
         self._position = None
         self._agent_positions = None
-        self.auto = False
+        self.t = 1
         ################################################################ EDIT BY MY
 
         ## - i is for data image sequence
@@ -178,6 +162,7 @@ class CarlaGame(object):
         try:
             while True:
                 self._on_loop()
+
         finally:
             ################################################################### SAVING THE DATA ON MEMORY
             os.chdir(
@@ -221,110 +206,45 @@ class CarlaGame(object):
         self._is_on_reverse = False
 
     def _on_loop(self):
-        self._timer.tick()
+
         measurements, sensor_data = self.client.read_data()
+        control = VehicleControl()
         self._main_image = sensor_data.get('CameraRGB', None)
         # self._mini_view_image1 = sensor_data.get('CameraDepth', None)
-
-        ## Print measurements every second.
-            # Plot position on the map as well.
-        ##get keyboard commands->
-        control = self._get_keyboard_control(
-            pygame.key.get_pressed())  ##############  IMP (used get_keyboard control func)
-        # Set the player position
-        '''
+        try:
+            print("model starting")
+            img = image_converter.to_rgb_array(self._main_image)
+            x = [img]
+            x = np.asarray(x)
+            s = model.predict(x)[0]
+            throttle_pid.total += self.t
+            if(steer_pid.prev * s < 0):
+                steer_pid.total *= 0.2
+            control.throttle = throttle_pid.kp * self.t + throttle_pid.total * throttle_pid.ki
+            steer_pid.total += s
+            control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki + (s - steer_pid.prev) * steer_pid.kd
+            steer_pid.prev = s
+            if (self.t > 10):
+                self.t = 0
+                throttle_pid.total *= 0.2
+            print(s,control.steer, control.throttle)
+        except:
+            print("fir ruk gya")
+            throttle_pid.total += self.t
+            control.throttle = throttle_pid.kp * self.t + throttle_pid.total * throttle_pid.ki
+            control.steer = steer_pid.prev * steer_pid.kp
+            if (self.t > 10):
+                self.t = 0
+                throttle_pid.total *= 0.2
+            print(control.steer, control.throttle)
         if control is None:
-            self._on_new_episode()
-        '''
-        if self._enable_autopilot:
+            print("kuch nhi")
+        elif self._enable_autopilot:
             self.client.send_control(measurements.player_measurements.autopilot_control)
         else:
             self.client.send_control(control)
 
-    def _get_keyboard_control(self, keys):
-        """
-        Return a VehicleControl message based on the pressed keys. Return None
-        if a new episode was requested.
-        """
-        if keys[K_r]:
-            return None
-        control = VehicleControl()
-        self.resetVal()
-        ################################################### YOU CAN EDIT IT ACCORDING YOU....
-        if keys[K_p]:
-            if not self.auto:
-                print("Starting model")
-                self.auto = True
-                time.wait(0.5)
-            else:
-                print("Stopping model")
-                self.auto = False
-                time.wait(0.5)
-        if self.auto:
-            try:
-                # print("model starting")
-                img = image_converter.to_rgb_array(self._main_image)
-                x = [img]
-                x = np.asarray(x)
-                s, t = model.predict(x)[0]
-                throttle_pid.total += t
-                control.throttle = throttle_pid.kp * t + throttle_pid.total * throttle_pid.ki
-                steer_pid.total += s
-                control.steer = steer_pid.kp * s + steer_pid.total * steer_pid.ki + (
-                            s - steer_pid.prev) * throttle_pid.kd
-                steer_pid.prev = s
-                self.client.send_control(control)
-                print(control.steer, control.throttle)
-            except:
-                control.throttle = throttle_pid.prev * throttle_pid.kp
-                control.steer = steer_pid.prev * steer_pid.kp
-                self.client.send_control(control)
-                print(control.throttle, control.steer)
-        else:
-            if keys[K_LEFT] or keys[K_a]:
-                self._val1 = -1
-                print("Left")
-                if (pid.prev > 0):
-                    pid.prev = 0
-            elif keys[K_RIGHT] or keys[K_d]:
-                self._val1 = 1
-                print("Right")
-                if (pid.prev < 0):
-                    pid.prev = 0
-            pid.prev += self._val1
-            output = pid.kp * self._val1 + pid.ki * pid.prev
-            print(output)
-            control.steer = output  # Imp Line
 
-            if keys[K_UP] or keys[K_w]:
-                self._val2 = 1
-                pid.prev = 0
-
-            elif keys[K_DOWN] or keys[K_s]:
-                control.brake = 1
-                pid.prev = 0
-            ###
-            if (self._velocity < 77):
-                control.throttle = self._val2  # Imp Line
-            else:
-                control.throttle = self._val2 * 0.8
-            if keys[K_SPACE]:
-                control.hand_brake = True
-                pid.prev = 0
-            if keys[K_f]:
-                self._val3 = 1 - self._val3
-            if keys[K_q]:
-                self._is_on_reverse = not self._is_on_reverse
-                pid.prev = 0
-            #    if keys[K_p]:
-            #        self._enable_autopilot = not self._enable_autopilot
-            control.reverse = self._is_on_reverse
-            ################################################################################
-
-            # control = model.evaluate(X, Y, verbose=0)
-            # print(control)
-            return control
-        
 def main():
     argparser = argparse.ArgumentParser(
         description='CARLA Manual Control Client')
